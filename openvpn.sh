@@ -141,7 +141,7 @@ The 'command' (if provided and valid) will be run instead of openvpn
     exit $RC
 }
 
-while getopts ":hdfr:t:v:" opt; do
+while getopts ":hdfor:t:v:" opt; do
     case "$opt" in
         h) usage ;;
         d) DNS=true ;;
@@ -149,6 +149,7 @@ while getopts ":hdfr:t:v:" opt; do
         r) return_route "$OPTARG" ;;
         t) timezone "$OPTARG" ;;
         v) eval vpn $(sed 's/^\|$/"/g; s/;/" "/g' <<< $OPTARG) ;;
+        o) OVPN=true ;;
         "?") echo "Unknown option: -$OPTARG"; usage 1 ;;
         ":") echo "No argument value for option: -$OPTARG"; usage 2 ;;
     esac
@@ -169,8 +170,6 @@ elif [[ $# -ge 1 ]]; then
 elif ps -ef | egrep -v 'grep|openvpn.sh' | grep -q openvpn; then
     echo "Service already running, please restart container to apply changes"
 else
-    [[ -e /vpn/vpn.conf ]] || { echo "ERROR: VPN not configured!"; sleep 120; }
-    [[ -e /vpn/vpn-ca.crt ]] || { echo "ERROR: VPN cert missing!"; sleep 120; }
     [[ -x /sbin/resolvconf ]] || { cat >/sbin/resolvconf <<-EOF
 		#!/usr/bin/env bash
 		conf=/etc/resolv.conf
@@ -182,5 +181,13 @@ else
 		fi
 		EOF
         chmod +x /sbin/resolvconf; }
-    exec sg vpn -c "openvpn --config /vpn/vpn.conf"
+
+    if [[ "${OVPN:-""}" ]]; then
+        exec sg vpn -c "openvpn --config /vpn/vpn.ovpn"
+    else
+        [[ -e /vpn/vpn.conf ]] || { echo "ERROR: VPN not configured!"; sleep 120; }
+        [[ -e /vpn/vpn-ca.crt ]] || { echo "ERROR: VPN cert missing!"; sleep 120; }
+        exec sg vpn -c "openvpn --config /vpn/vpn.conf"
+    fi
 fi
+
